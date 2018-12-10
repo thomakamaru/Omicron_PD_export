@@ -1,0 +1,99 @@
+clear all
+clc
+
+%% OMICRON BINARY FILE READER
+% This script is used to read binary files that are exported by the Omicron Software e.g. for MPD600.
+% To achieve the necessary files, the software has to record a stream file.
+% When replaying the stream file the "Matlab Export" can be executed under
+% the "Replay" tab.
+% It is necessary "Generate Phase Vector File" (checkbox).
+% The export contains 3 binary files: unit1.1.PH, unit1.1.Q, unit1.1.V
+% This script reads the 3 files and converts the measurement data into a .m
+% file that can be easily read by MATLAB.
+% The evaluation of the data can then be done with another script.
+
+%Read binary Omicron files
+selpath = uigetdir;
+addpath(selpath);
+
+%% read .PH file --> phase angle in .x of total cycle (-> 0.9 = 90% of voltage
+%cycle)
+%the file only contains 64 bit floats
+if exist('unit1.1.PH', 'file') == 2 %check if file exists
+    fid1 = fopen('unit1.1.PH','rb','ieee-le');
+    PH = fread(fid1,Inf,'float64');
+    fclose(fid1);
+else
+    disp('ERROR: Phase Angle File Not Found! Make sure that the file is named "unit.1.1.PH" and is placed in the selected folder')
+end
+
+%% the exported Q file has a 32bit float for the charge followed by a 64bit
+%float for the timestampt
+
+if exist('unit1.1.Q', 'file') == 2
+    %read Q file --> charge in Coloumb
+    fid2 = fopen('unit1.1.Q','rb','ieee-le');
+    skip=8; %64bit = 8 byte --> the skips the timestamps
+    Q = fread(fid2,'float32',skip);
+    fclose(fid2);
+    
+    %same file is opened to read the timestamp
+    fid2 = fopen('unit1.1.Q','rb','ieee-le');
+    fseek(fid2, 4, 0); %offset of 32bit = 4 byte --> starting with a timestamp
+    skip=4; %32bit = 4byte, see above
+    t = fread(fid2,'float64',skip);
+    fclose(fid2);
+else
+    disp('ERROR: Charge File Not Found! Make sure that the file is named "unit1.1.Q" and is placed in the selected folder')
+end
+
+%% read .V file --> Voltage values every 48us.
+if exist('unit1.1.V', 'file') == 2
+    fid3 = fopen('unit1.1.V','rb','ieee-le');
+    V = fread(fid1,Inf,'float32');
+    fclose(fid3);
+else
+    disp('If required: Make sure that the file is named "unit1.1.V" and is placed in the selected folder')
+end
+
+%% check length of all files
+if (length(PH) ~= length(Q)) && (length(PH) ~= length(t))
+    disp('Oops, something went wrong. The imported data sets should have the same length. Please check if the files are correctly placed and the export of the MPD system was successful.');
+end
+
+% %% average the voltage measurement to a single sinus
+% fs= 1/(48e-6); %sampling rate of voltage measurement
+% V = detrend(V,0);
+% xdft = fft(V);
+% freq = 0:fs/length(V):fs/2;
+% xdft = xdft(1:length(V)/2+1);
+% % figure(1)
+% % plot(freq,abs(xdft));
+% [~,I] = max(abs(xdft));
+% fsig = freq(I); %average frequency of the recorded voltage signal
+% 
+% ts = 0:1/fs:(length(V)/fs)-1;
+% pks_p = findpeaks(V,ts,'MinPeakDistance',100);
+% pks_n = findpeaks(-V,ts,'MinPeakDistance',100));
+% 
+% U_rms = (mean(pks_p)+mean(pks_n))/(2);
+% tsig = 0:0.0001:1/fsig;
+% plot(U_rms*sin(2*pi*fsig*tsig))
+% 
+% 
+% 
+% n_cycles = floor(length(V)/fs);
+% tPulse = 0:1/fsig:length(V);
+% % figure(2)
+% % tsa(V,fs,tPulse)
+
+%% save file as csv and/or .m files
+%put t,Q,PH into one matrix
+M = t;
+M(:,2) = Q;
+M(:,3) = PH;
+header = {'Time in seconds','Charge in Coloumb','Phase Angle in % of total cycle'};
+PD_histo = [header; num2cell(M)];
+save(strcat(selpath,'\PD_histogram.mat'),'PD_histo');
+Volts = [{'Voltage in V'}; num2cell(V)];
+save(strcat(selpath,'\Voltage.mat'),'Volts');
