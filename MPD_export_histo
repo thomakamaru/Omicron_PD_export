@@ -12,6 +12,8 @@ clc
 % file that can be easily read by MATLAB.
 % The evaluation of the data can then be done with another script.
 
+%github: https://github.com/thomakamaru/Omicron_PD_export/edit/master/MPD_export_histo
+
 %Read binary Omicron files
 selpath = uigetdir;
 addpath(selpath);
